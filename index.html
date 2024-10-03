@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemeFi Bot Turbo</title>
+    <style>
+      * {
+        padding: 0px;
+        margin: 0px;
+        box-sizing: border-box;
+      }
+      .memefi_bot_iframe {
+        width: 500px;
+        height: 700px;
+        border-radius: 10px;
+      }
+      body {
+        padding: 2rem;
+      }
+      .spend_turbo_button {
+        padding: 5px;
+        border-width: 3px;
+        border-radius: 5px;
+        width: 300px;
+        font-weight: bold;
+        background-color: #FFBE33;
+        height: 40px;
+        display: inline-block;
+        font-size: 18px;
+      }
+    </style>
+</head>
+<body>
+   <center class="heading_center">
+    <h1>MemeFi Turbo</h1>
+   </center>
+   <br>
+
+   <center>
+    <iframe
+        src=""
+        class="memefi_bot_iframe"
+        frameborder="0"
+        id="memefi_bot_iframe">
+    </iframe>
+   </center>
+
+   <br>
+   <center>
+    <div><b>Coin Balance: </b><span class="coin_balance_span">0000000</span></div>
+    <br>
+    <button id="turbo_button" class="spend_turbo_button">Spend Turbo</button>
+   </center>
+
+   <script>
+    let memefi_bot_iframe = document.querySelector('#memefi_bot_iframe');
+
+    const queryString = window.location.search;
+    let urlParams = new URLSearchParams(queryString)
+    let pare_url = urlParams.get("url");
+
+    if(!pare_url){
+       alert('please enter the correct url');
+    }else{
+      memefi_bot_iframe.src = pare_url;
+
+      let turbo_button = document.querySelector("#turbo_button");
+      let coin_span = document.querySelector('.coin_balance_span');
+      let token;
+
+      function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      let hasToken = true;
+
+      async function get_auth_token(){
+
+          if(!hasToken){
+            return;
+          }
+
+          await delay(5000);
+
+          async function getUrlParameters(url) {
+            const params = {};
+
+            const parser = new URL(url);
+
+            const queryString = parser.hash.substring(1);
+
+            const queryParts = queryString.split('&');
+
+            queryParts.forEach((part) => {
+              const [key, value] = part.split('=');
+              params[decodeURIComponent(key)] = decodeURIComponent(value);
+            });
+
+            return params;
+          }
+
+          async function parseWebAppData(tgWebAppData) {
+            const data = {};
+            const params = tgWebAppData.split('&');
+
+            params.forEach((part) => {
+              const [key, value] = part.split('=');
+
+              if (key === 'user') {
+                data.user = JSON.parse(decodeURIComponent(value));
+              } else {
+                data[key] = decodeURIComponent(value);
+              }
+            });
+
+            return data;
+          }
+
+          const parameters = await getUrlParameters(pare_url);
+          const webAppData = await parseWebAppData(parameters.tgWebAppData);
+
+          async function sendTelegramLoginRequest() {
+            const payload = [
+                {
+                    "operationName": "MutationTelegramUserLogin",
+                    "variables": {
+                        "webAppData": {
+                            "auth_date":Number(webAppData.auth_date),
+                            "hash":`${webAppData.hash}`,
+                            "query_id": `${webAppData.query_id}`,
+                            "checkDataString": `auth_date=${webAppData.auth_date}\nquery_id=${webAppData.query_id}\nuser={"id":${webAppData.user.id},"first_name":"${webAppData.user.first_name}","last_name":"${webAppData.user.last_name}","username":"${webAppData.user.username}","language_code":"${webAppData.user.language_code}","allows_write_to_pm":${webAppData.user.allows_write_to_pm}}`,
+                            "user": {
+                                "id":Number(webAppData.user.id),
+                                "allows_write_to_pm": true,
+                                "first_name": `${webAppData.user.first_name}`,
+                                "last_name":`${webAppData.user.last_name}`,
+                                "username":`${webAppData.user.username}`,
+                                "language_code":`${webAppData.user.language_code}`,
+                                "version": "7.10",
+                                "platform": "android"
+                            }
+                        }
+                    },
+                    "query": "mutation MutationTelegramUserLogin($webAppData: TelegramWebAppDataInput!, $referralCode: String) {\n  telegramUserLogin(webAppData: $webAppData, referralCode: $referralCode) {\n    access_token\n    __typename\n  }\n}"
+                }
+            ];
+
+            await fetch('https://api-gw-tg.memefi.club/graphql', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(async (data) => {
+              const accessToken = data[0].data.telegramUserLogin.access_token;
+              token = accessToken;
+
+              if(token != null || token != undefined || token != ""){
+                hasToken = false;
+
+                await got_to_burn();
+              }
+
+            })
+            .catch((error) => {
+
+            });
+          }
+
+          sendTelegramLoginRequest();
+
+      }
+
+      memefi_bot_iframe.addEventListener('load',async function(){
+        await get_auth_token();
+      })
+
+      async function got_to_burn(){
+        turbo_button.addEventListener('click',async function(){
+          turbo_button.innerHTML = "Spend Turbo";
+          await burning();
+        })
+      }
+
+      // ========================================
+      async function burning(){
+          turbo_button.innerHTML = "Turbo Spending...";
+          let authToken = 'Bearer '+token;
+          let nonce = 'ca5b00f66055fc87c6d7dfee63a947f8e705d0ddd8d88c4a3fda874775625222';
+
+          const url = 'https://api-gw-tg.memefi.club/graphql';
+
+          // ===================================================================================
+          let nextCallDiff = 10;
+          let nextTurboCollectDiff = 1;
+          let is20LevelOver = false;
+          // ===================================================================================
+          let vactorType = "2";
+          let vactorMul = 100;
+          let vactorLimit = 40000;
+          // ===================================================================================
+
+          let accountId = 0;
+          let maxHealth = 0;
+          let level = 0;
+          let currentTurboAmount = 0;
+          let coinsAmount = 0;
+          let maxVactor = 0;
+          let vactorArray = [];
+
+          // =========== fetch functions =============== //
+          function delay(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+          }
+
+          // get account informations
+
+          async function levelUp() {
+            await fetch(url, {
+              method: 'POST',
+              headers: {
+                Authorization: authToken,
+                'Content-Type': 'application/json',
+                Accept: '*/*',
+              },
+              body: JSON.stringify({
+                operationName: 'TelegramBossKillRewards',
+                variables: {},
+                query: `query TelegramBossKillRewards {
+                  telegramBossKillRewards {
+                    id
+                    level
+                    amount
+                    __typename
+                  }
+                  telegramUserReferralConfig {
+                    id
+                    level
+                    rewardAmount
+                    rewardType
+                    __typename
+                  }
+                  telegramBossList {
+                    health
+                    level
+                    name
+                    __typename
+                  }
+                }`,
+              }),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                console.log("Boss reward collected.");
+              })
+              .catch((error) => console.error('Error:', error));
+
+            const requestData = {
+              operationName: 'telegramGameSetNextBoss',
+              variables: {},
+              query: `
+              mutation telegramGameSetNextBoss {
+                telegramGameSetNextBoss {
+                  ...FragmentBossFightConfig
+                  __typename
+                }
+              }
+
+              fragment FragmentBossFightConfig on TelegramGameConfigOutput {
+                _id
+                coinsAmount
+                currentEnergy
+                maxEnergy
+                weaponLevel
+                zonesCount
+                tapsReward
+                energyLimitLevel
+                energyRechargeLevel
+                tapBotLevel
+                currentBoss {
+                  _id
+                  level
+                  currentHealth
+                  maxHealth
+                  __typename
+                }
+                freeBoosts {
+                  _id
+                  currentTurboAmount
+                  maxTurboAmount
+                  turboLastActivatedAt
+                  turboAmountLastRechargeDate
+                  currentRefillEnergyAmount
+                  maxRefillEnergyAmount
+                  refillEnergyLastActivatedAt
+                  refillEnergyAmountLastRechargeDate
+                  __typename
+                }
+                bonusLeaderDamageEndAt
+                bonusLeaderDamageStartAt
+                bonusLeaderDamageMultiplier
+                nonce
+                spinEnergyNextRechargeAt
+                spinEnergyNonRefillable
+                spinEnergyRefillable
+                spinEnergyTotal
+                spinEnergyStaticLimit
+                __typename
+              }
+            `,
+            };
+
+            fetch(url, {
+              method: 'POST',
+              headers: {
+                Authorization: authToken,
+                'Content-Type': 'application/json',
+                Accept: '*/*',
+                'Accept-Encoding': 'gzip, deflate, br, zstd',
+              },
+              body: JSON.stringify(requestData),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                console.log('Boss Updated');
+              })
+              .catch((error) => console.error('Error:', error));
+
+            console.log('');
+
+            return true;
+          }
+
+          async function get_account_information(){
+              const get_account_body = JSON.stringify([
+              {
+                  operationName: 'QUERY_GAME_CONFIG',
+                  variables: {},
+                  query: `query QUERY_GAME_CONFIG {
+              telegramGameGetConfig {
+                  ...FragmentBossFightConfig
+                  __typename
+              }
+              }
+              fragment FragmentBossFightConfig on TelegramGameConfigOutput {
+              _id
+              coinsAmount
+              currentEnergy
+              maxEnergy
+              weaponLevel
+              zonesCount
+              tapsReward
+              energyLimitLevel
+              energyRechargeLevel
+              tapBotLevel
+              currentBoss {
+                  _id
+                  level
+                  currentHealth
+                  maxHealth
+                  __typename
+              }
+              freeBoosts {
+                  _id
+                  currentTurboAmount
+                  maxTurboAmount
+                  turboLastActivatedAt
+                  turboAmountLastRechargeDate
+                  currentRefillEnergyAmount
+                  maxRefillEnergyAmount
+                  refillEnergyLastActivatedAt
+                  refillEnergyAmountLastRechargeDate
+                  __typename
+              }
+              bonusLeaderDamageEndAt
+              bonusLeaderDamageStartAt
+              bonusLeaderDamageMultiplier
+              nonce
+              spinEnergyNextRechargeAt
+              spinEnergyNonRefillable
+              spinEnergyRefillable
+              spinEnergyTotal
+              spinEnergyStaticLimit
+              __typename
+              }`,
+              },
+              ]);
+
+              const options = {
+              method: 'POST',
+              headers: {
+                  Authorization: authToken,
+                  'Content-Type': 'application/json',
+                  Accept: '*/*',
+                  Origin: 'https://tg-app.memefi.club',
+                  Referer: 'https://tg-app.memefi.club/',
+              },
+              body: get_account_body,
+              };
+
+              await fetch(url, options)
+              .then((response) => response.json())
+              .then((data) => {
+                  let res = JSON.stringify(data);
+                  let res1 = JSON.parse(res);
+
+                  maxHealth = res1[0].data.telegramGameGetConfig.currentBoss.currentHealth;
+                  level = res1[0].data.telegramGameGetConfig.currentBoss.level;
+                  currentTurboAmount = res1[0].data.telegramGameGetConfig.freeBoosts.currentTurboAmount;
+                  coinsAmount = res1[0].data.telegramGameGetConfig.coinsAmount;
+                  accountId = res1[0].data.telegramGameGetConfig._id;
+                  coin_span.innerHTML = coinsAmount;
+              })
+              .catch((error) => console.error('Error:', error));
+          }
+
+          async function config_single_turbo(){
+            let trubo_res = false;
+
+            const payload_1 = [
+              {
+                operationName: 'telegramGameActivateBooster',
+                variables: {
+                  boosterType: 'Turbo',
+                },
+                query: `mutation telegramGameActivateBooster($boosterType: BoosterType!) {
+                    telegramGameActivateBooster(boosterType: $boosterType) {
+                      ...FragmentBossFightConfig
+                      __typename
+                    }
+                  }
+
+                  fragment FragmentBossFightConfig on TelegramGameConfigOutput {
+                    _id
+                    coinsAmount
+                    currentEnergy
+                    maxEnergy
+                    weaponLevel
+                    zonesCount
+                    tapsReward
+                    energyLimitLevel
+                    energyRechargeLevel
+                    tapBotLevel
+                    currentBoss {
+                      _id
+                      level
+                      currentHealth
+                      maxHealth
+                      __typename
+                    }
+                    freeBoosts {
+                      _id
+                      currentTurboAmount
+                      maxTurboAmount
+                      turboLastActivatedAt
+                      turboAmountLastRechargeDate
+                      currentRefillEnergyAmount
+                      maxRefillEnergyAmount
+                      refillEnergyLastActivatedAt
+                      refillEnergyAmountLastRechargeDate
+                      __typename
+                    }
+                    bonusLeaderDamageEndAt
+                    bonusLeaderDamageStartAt
+                    bonusLeaderDamageMultiplier
+                    nonce
+                    spinEnergyNextRechargeAt
+                    spinEnergyNonRefillable
+                    spinEnergyRefillable
+                    spinEnergyTotal
+                    spinEnergyStaticLimit
+                    __typename
+                  }`,
+              },
+            ];
+
+            await fetch(url, {
+              method: 'POST',
+              headers: {
+                Authorization: authToken,
+                'Content-Type': 'application/json',
+                Accept: '*/*',
+                Origin: 'https://tg-app.memefi.club',
+                'Cache-Control': 'no-cache',
+                Pragma: 'no-cache',
+              },
+              body: JSON.stringify(payload_1),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+
+                let res = JSON.stringify(data);
+                let res1 = JSON.parse(res);
+                // let each_curr_turbo = res1[0].data.telegramGameActivateBooster.freeBoosts.currentTurboAmount;
+
+                trubo_res = true;
+
+                console.log(`Turbo loaded.`);
+
+              })
+              .catch();
+
+              if(trubo_res){
+                return true;
+              }else{
+                  return false;
+              }
+          }
+
+          async function add_trubo_amount() {
+
+            for (const vac of vactorArray) {
+              let retry = true;
+
+              while (retry) {
+                let single_turbo_set_result = await config_single_turbo();
+
+                if (!single_turbo_set_result) {
+                  continue;
+                }
+
+                retry = false;
+
+                await delay(nextTurboCollectDiff * 1000);
+
+                let payload_str = vac.join('');
+                let vactor_taps = vac[0]
+                  .split(',')
+                  .filter((item) => item === vactorType).length;
+
+                const payload = {
+                  operationName: 'MutationGameProcessTapsBatch',
+                  variables: {
+                    payload: {
+                      nonce: nonce,
+                      tapsCount: vactor_taps,
+                      vector: payload_str,
+                    },
+                  },
+                  query: `mutation MutationGameProcessTapsBatch($payload: TelegramGameTapsBatchInput!) {
+                  telegramGameProcessTapsBatch(payload: $payload) {
+                    ...FragmentBossFightConfig
+                    __typename
+                  }
+                }
+
+                fragment FragmentBossFightConfig on TelegramGameConfigOutput {
+                  _id
+                  coinsAmount
+                  currentEnergy
+                  maxEnergy
+                  weaponLevel
+                  zonesCount
+                  tapsReward
+                  energyLimitLevel
+                  energyRechargeLevel
+                  tapBotLevel
+                  currentBoss {
+                    _id
+                    level
+                    currentHealth
+                    maxHealth
+                    __typename
+                  }
+                  freeBoosts {
+                    _id
+                    currentTurboAmount
+                    maxTurboAmount
+                    turboLastActivatedAt
+                    turboAmountLastRechargeDate
+                    currentRefillEnergyAmount
+                    maxRefillEnergyAmount
+                    refillEnergyLastActivatedAt
+                    refillEnergyAmountLastRechargeDate
+                    __typename
+                  }
+                  bonusLeaderDamageEndAt
+                  bonusLeaderDamageStartAt
+                  bonusLeaderDamageMultiplier
+                  nonce
+                  spinEnergyNextRechargeAt
+                  spinEnergyNonRefillable
+                  spinEnergyRefillable
+                  spinEnergyTotal
+                  spinEnergyStaticLimit
+                  __typename
+                }`,
+                };
+
+                try {
+                  const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: authToken,
+                      'Content-Type': 'application/json',
+                      Accept: '*/*',
+                      Origin: 'https://tg-app.memefi.club',
+                    },
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await response.json();
+
+                  console.log(
+                    'CoinBalance - ' + data.data.telegramGameProcessTapsBatch.coinsAmount,
+                  );
+                  coin_span.innerHTML = data.data.telegramGameProcessTapsBatch.coinsAmount;
+                  console.log(`Turbo amount added ✅`);
+                  console.log('_');
+                } catch (error) {
+                  console.error('Error:', error);
+                }
+              }
+            }
+
+            await levelUp();
+            await delay(nextCallDiff * 1000);
+            manageFunctions();
+          }
+
+          // ============= helper function ============= //
+          async function reset_all_variables(){
+              accountId = 0;
+              maxHealth = 0;
+              level = 0;
+              currentTurboAmount = 0;
+              coinsAmount = 0;
+              maxVactor = 0;
+              vactorArray = [];
+          }
+
+          // set config details and calculate bot request
+          async function calculate_bot_details(){
+            maxVactor = Math.floor(maxHealth / vactorMul);
+            console.log(`Max Vactor: ${maxVactor}`);
+
+            if (maxVactor < 1) {
+              console.log("Vactor must be greater than 0");
+              return false;
+            }
+
+            function vactorSet(){
+
+              if (maxVactor <= 0) {
+                return false;
+              }
+
+              let vactorString = "";
+              if(maxVactor > vactorLimit){
+                  for (let i = 0; i < vactorLimit; i++) {
+                    vactorString += vactorType;
+
+                    if (i < vactorLimit - 1) {
+                      vactorString += ',';
+                    }
+
+                  }
+                  maxVactor = maxVactor - vactorLimit;
+              }else{
+                  for (let i = 0; i < maxVactor; i++) {
+                      vactorString += vactorType;
+
+                      if (i < maxVactor - 1) {
+                        vactorString += ',';
+                      }
+                  }
+                  maxVactor = maxVactor - maxVactor;
+              }
+              vactorArray.push([vactorString]);
+              vactorSet();
+
+            }
+
+            vactorSet();
+            return true;
+
+          }
+
+          // check all the require details
+          async function checkTurboLevel(){
+
+              if (level > 20) {
+                if(is20LevelOver){
+
+                }else{
+                  console.log('Meme needs to be below 15 level');
+                  return false;
+                }
+              }
+
+              if(currentTurboAmount == 0){
+                  console.log('Turbo amount is 0');
+                  return false;
+              }
+
+              console.log(`Level: ${level}`);
+              console.log(`CurrentTurboAmount: ${currentTurboAmount}`);
+
+              return true;
+          }
+
+          async function manageFunctions(){
+              // get account information
+              await get_account_information();
+              console.log(`AccountId: ${accountId}`);
+              console.log(`CoinsAmount: ${coinsAmount}`);
+              console.log(`Level: ${level}`);
+              console.log(`MaxHealth: ${maxHealth}`);
+              console.log(`CurrentTurboAmount: ${currentTurboAmount}`);
+              console.log("");
+
+              // check turbo and level
+              let check_turbo_level_result = await checkTurboLevel();
+              if(!check_turbo_level_result){
+                  return;
+              }
+              console.log("");
+
+
+              // calculate bot details
+              let calculate_bot_details_result = await calculate_bot_details();
+              if (!calculate_bot_details_result) {
+                return;
+              }
+              console.log('');
+
+              let add_trubo_amount_result = add_trubo_amount();
+              await reset_all_variables();
+
+          }
+
+          async function scriptController(){
+            await manageFunctions();
+          }
+
+          scriptController();
+
+      }
+
+    }
+
+
+   </script>
+
+</body>
+</html>
